@@ -51,7 +51,7 @@ to repository pages of "Dynamo admin" http UI of ATG platform. (think *localhost
   * **Q**: Why is the quality of the code so terrible ? 
   
     * Because I'm no JS developer
-    * Because it's one of those hacked-without-any-planning
+    * Because it's one of those hacked-without-any-planning projects
     * Because it works (more or less) and I don't have time for complete rewrite ;-)
     
   * **Q**: What if I just have some good idea about another cool feature?
