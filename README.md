@@ -17,10 +17,10 @@ to repository pages of "Dynamo admin" http UI of ATG platform. (think *localhost
     > Note: So you basically don't need to hunt-down the "invalidateCaches" method over and over again
 
 2. New **repository-item-level based UI buttons** allowing you to quickly:
-  * generate <query-items> script template for specified repository item 
-  * generate <add-item> script template for specified repository item
-  * generate <remove-item> script template for specified repository item
-  * generate <add-item> script template for specified repository item - including <set-property> tags for (either just required or all) item's properties  
+  * generate \<query-items\> script template for specified repository item 
+  * generate \<add-item\> script template for specified repository item
+  * generate \<remove-item\> script template for specified repository item
+  * generate \<add-item\> script template for specified repository item - including \<set-property\> tags for (either just required or all) item's properties  
 
     > Because nobody really likes to type stuff like  \<query-items item-descriptor="category"\>ALL\</query-items\> over and over again.. 
     
@@ -30,12 +30,12 @@ to repository pages of "Dynamo admin" http UI of ATG platform. (think *localhost
   >No more annoying scrolling / searching!
 
 4. Some new useful keyboard shortcuts:
-  * Alt+x = jump to **X** ML (repository query) editor
-  * Alt+t = jump to the start of repository **T**able (the one containing items & their properties)
-  * Alt+s = jump to repository cache **S**tatistics
-  * Alt+r = jump to query **R**esults
-  * Alt+o = open repository cho**O**ser modal window (not very usefull at the moment)
-  * Alt+c = jump to **C**harts with cache hit/miss
+  * Alt+x = jump to XML (repository query) editor
+  * Alt+t = jump to the start of repository Table (the one containing items & their properties)
+  * Alt+s = jump to repository cache Statistics
+  * Alt+r = jump to query Results
+  * Alt+o = open repository choOser modal window (not very usefull at the moment)
+  * Alt+c = jump to Charts with cache hit/miss
   * Ctrl+Enter (in XML editor) = execute the query
 
 5. XML syntax highlighting 
@@ -47,16 +47,16 @@ to repository pages of "Dynamo admin" http UI of ATG platform. (think *localhost
   * (not so) fancy graphs at the bottom of the page (arguably useful)
 
 7. Clickable values in query results
-  * if the property behind <set-property> tag in query results is a reference to another repository item (item-type or component-item-type) then the value will be clickable. 
+  * if the property behind \<set-property\> tag in query results is a reference to another repository item (item-type or component-item-type) then the value will be clickable. 
   * If you click the link, it will get you to the referenced item
    
 
 ###FAQ
   * **Q**: Why is the quality of the code so terrible ? 
-  
-    * Because I'm no JS developer
-    * Because it's one of those hacked-without-any-planning projects
-    * Because it works (more or less) and I don't have time for complete rewrite ;-)
+    * It was written "hack-until-it-somehow-works" approach
+    * Features were randomly added without any planning.
+    * I'm not a JS developer
+    * I don't have time for complete rewrite (the code deserves it!)
     
   * **Q**: What if I just have some good idea about another cool feature?
   
