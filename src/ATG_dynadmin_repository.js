@@ -16,7 +16,7 @@
 // @require       http://cdnjs.cloudflare.com/ajax/libs/codemirror/3.21.0/mode/xml/xml.js
 // @require       http://cdn.jsdelivr.net/simplemodal/1.4.4/jquery.simplemodal.min.js
 // @require       http://cdnjs.cloudflare.com/ajax/libs/Chart.js/0.2.0/Chart.min.js
-// @updateUrl     https://czsvn.ness.com/nesssvn/to2-atg/wsc/branches/2.03/TCZWscB/others/Tampermonkey/Repository/ATG_dynadmin_repository.tamper.js
+// @updateUrl     https://github.com/brdloush/atg-dynadmin-repository/blob/master/src/ATG_dynadmin_repository.js
 
 // ==/UserScript==
 // 0.16 - Alt+o opens a modal window containing repositories listed in ContentRepositories component
