@@ -22,13 +22,15 @@ to repository pages of "Dynamo admin" http UI of ATG platform. (think *localhost
   * generate <remove-item> script template for specified repository item
   * generate <add-item> script template for specified repository item - including <set-property> tags for (either just required or all) item's properties  
 
-    > Note: for all of these buttons, there's a "secondary" mode: if you shift-click the button : eg. queries will be performed immediatelly after the click
+    > Because nobody really likes to type stuff like  <query-items item-descriptor="category">ALL</query-items> over and over again.. 
+    
+    > For all of these buttons, there's a "secondary" mode: if you shift-click the button : eg. queries will be performed immediatelly after the click
 
 3. Whenever you execute a query, the browser will jump to the "Results:" section of the page. 
   >No more annoying scrolling / searching!
 
 4. Some new useful keyboard shortcuts:
-  * Alt+x = jump to **X**ML (repository query) editor
+  * Alt+x = jump to **X** ML (repository query) editor
   * Alt+t = jump to the start of repository **T**able (the one containing items & their properties)
   * Alt+s = jump to repository cache **S**tatistics
   * Alt+r = jump to query **R**esults
