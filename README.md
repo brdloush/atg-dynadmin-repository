@@ -66,12 +66,12 @@ to repository pages of "Dynamo admin" http UI of ATG platform. (think *localhost
 
 ###Screenshots:
 * #####Repository-level and repository-item-level buttons:
-  * ![Repository-level and repository-item-level buttons:](http://raw.githubusercontent.com/brdloush/atg-dynadmin-repository/master/doc/images/helper-buttons.png)
+  * ![Repository-level and repository-item-level buttons:](https://raw.githubusercontent.com/brdloush/atg-dynadmin-repository/master/doc/images/helper-buttons.png)
 
 * #####XML syntax highlighting of results (incliding clickable items):
-  * ![XML syntax highlighting of results (incliding clickable items):](http://raw.githubusercontent.com/brdloush/atg-dynadmin-repository/master/doc/images/search-result.png)
+  * ![XML syntax highlighting of results (incliding clickable items):](https://raw.githubusercontent.com/brdloush/atg-dynadmin-repository/master/doc/images/search-result.png)
 
 * #####XML syntax highlighting:
-  * ![XML syntax highlighting:](http://raw.githubusercontent.com/brdloush/atg-dynadmin-repository/master/doc/images/xml-highlighting.png)
+  * ![XML syntax highlighting:](https://raw.githubusercontent.com/brdloush/atg-dynadmin-repository/master/doc/images/xml-highlighting.png)
 
 
