@@ -22,7 +22,7 @@ to repository pages of "Dynamo admin" http UI of ATG platform. (think *localhost
   * generate <remove-item> script template for specified repository item
   * generate <add-item> script template for specified repository item - including <set-property> tags for (either just required or all) item's properties  
 
-    > Because nobody really likes to type stuff like  <query-items item-descriptor="category">ALL</query-items> over and over again.. 
+    > Because nobody really likes to type stuff like  \<query-items item-descriptor="category"\>ALL\</query-items\> over and over again.. 
     
     > For all of these buttons, there's a "secondary" mode: if you shift-click the button : eg. queries will be performed immediatelly after the click
 
