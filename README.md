@@ -5,6 +5,8 @@ atg-dynadmin-repository
 Simple user script for GreaseMonkey (firefox) or TamperMonkey (google chrome) plugins, which adds a couple of useful and user-friendly features
 to repository pages of "Dynamo admin" http UI of ATG platform. (think *localhost:8080/dyn/admin/nucleus/*)
 
+**_If you don't feel like reading this readme.md, I have a spoiler: there are screenshots on the very end of this readme ;-)_**
+
 ###What features are added?
 
 1. New **repository-level based UI-buttons**, allowing you to quickly perform following actions:
