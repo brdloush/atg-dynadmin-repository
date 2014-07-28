@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name       ATG_dynadmin_repository
 // @namespace  http://github.com/brdloush/atg-dynadmin-repository/
-// @version    0.16
+// @version    0.17
 
 // @description  Script that adds useful new buttons to ATG dyn/admin/nucleus UI + provides XML colorization to results of repository queries.  
 // @match      http://*/dyn/admin/nucleus/*Repository*
 // @match      http://*/dyn/admin/nucleus/*ProductCatalog*
 // @match      http://*/dyn/admin/nucleus/*PriceLists*
 // @match      http://*/dyn/admin/nucleus/atg/registry/ContentRepositories/*
-// @copyright  2013 Tomafi
+// @copyright  2013 Brdloush
 // @require       http://code.jquery.com/jquery-1.8.3.min.js
 // @require       http://yandex.st/highlightjs/7.3/highlight.min.js 
 // @require       http://cdn.craig.is/js/mousetrap/mousetrap.min.js
@@ -19,6 +19,7 @@
 // @updateUrl     http://github.com/brdloush/atg-dynadmin-repository/blob/master/src/ATG_dynadmin_repository.js
 
 // ==/UserScript==
+// 0.17 - clickable references should now work even for properties which are inherited from supertypes (eg. product) to subtypes (yourCustomProduct) 
 // 0.16 - Alt+o opens a modal window containing repositories listed in ContentRepositories component
 //      - Repository cache-miss percentage statistics graphs at the bottom of the page
 //      - Clickable references to properties which use  "component-item-type" or "item-type"
@@ -189,7 +190,6 @@ function addSuperTypePropertiesToItemTypeArray(targetItemDescriptor, currentSupe
 }
 
 function addLinkedPropertyToItemType(prop, repoPath, itemDescriptorNameOverride) {
- //
                 var itemDescriptorElement = $(prop).parent();
                 var itemDescriptorName =  itemDescriptorElement.attr('name');
                 var propName = $(prop).attr('name');
@@ -212,30 +212,77 @@ function addLinkedPropertyToItemType(prop, repoPath, itemDescriptorNameOverride)
     	itemTypes[propKey]=itemType;
 }
 
+superTypes = {};
+
+// ShopSku -> tczSku
+// tczSku -> sku
+
+function addSupertypesRecursivelyForDescriptor(superTypesMap, newlyDerivedMap, childDescriptor, currentlyProcessedParent) {
+    newlyDerivedMap[childDescriptor].push(currentlyProcessedParent);
+    var superTypesMapKeys = $.map(superTypesMap, function(value, key) { return key;});
+    var childOfCurrentlyProcessedParent = superTypesMap[currentlyProcessedParent];
+    if (typeof childOfCurrentlyProcessedParent != 'undefined' && $.inArray(childOfCurrentlyProcessedParent, superTypesMapKeys)) {
+        childOfCurrentlyProcessedParent = childOfCurrentlyProcessedParent[0];
+        console.log('going even deeper from '+currentlyProcessedParent+' to '+childOfCurrentlyProcessedParent);
+        addSupertypesRecursivelyForDescriptor(superTypesMap, newlyDerivedMap, childDescriptor, childOfCurrentlyProcessedParent);
+    } 
+}
+
+function addSupertypesRecursively(superTypesMap) {
+    var superTypesMapKeys = $.map(superTypesMap, function(value, key) { return key;});
+    var newlyDerivedMap = {};
+    $.map(superTypesMap, function(value, key) {
+        	newlyDerivedMap[key] = [];
+        	var firstValue= value[0];
+            if ($.inArray(firstValue,superTypesMapKeys)) {
+                console.log('going recursive for item '+key+'='+firstValue);
+                addSupertypesRecursivelyForDescriptor(superTypesMap, newlyDerivedMap, key, firstValue);
+            } else {
+				newlyDerivedMap[key] = [firstValue];
+            }
+        });  
+    return newlyDerivedMap;
+}
+
+
 function addTableInfo() {
     var urlForDescriptors =  $('a:contains("Examine Repository Template Definition")').attr('href');
 	var repoPath = urlForDescriptors.replace('/dyn/admin/nucleus',''); repoPath = repoPath.substring(0, repoPath.lastIndexOf("/"))
 
     $.get(urlForDescriptors, function( data ) {
         var htmlData = $(data);
-
+        
         var repositoryXml = $(htmlData.find('pre').first().text());
+
+        // find out  parent item-types for subtyped items
+        repositoryXml.find('item-descriptor[super-type]').each(function(i, item) {
+			$item = $(item);
+            var thisItemDescriptorName = $item.attr('name'); 
+            var descriptorNameOfSupertype = $item.attr('super-type');
+  			superTypes[thisItemDescriptorName] = [descriptorNameOfSupertype];
+        }); 
+	    // now let's recursively calculate all parents of subtyped items
+        superTypes = addSupertypesRecursively(superTypes);
+        
+        
         var propertiesWithItemType = repositoryXml.find('property[item-type],property[component-item-type]');
         // as we're parsing this valuable table info, we'll also parse a item->property->repository
             propertiesWithItemType.each(function(i, prop) {
-
                 addLinkedPropertyToItemType(prop, repoPath);
                
-                var itemDescriptorElement = $(prop).parent();
-                var itemDescriptorName =  itemDescriptorElement.attr('name');
-                
-                if ($(itemDescriptorElement).attr('super-type')) {
-					var superType= ($(itemDescriptorElement).attr('super-type'));
-                    addSuperTypePropertiesToItemTypeArray(itemDescriptorName, superType, repositoryXml, repoPath);
-                }
+//                var itemDescriptorElement = $(prop).parent();
+//                var itemDescriptorName =  itemDescriptorElement.attr('name');
+//                
+//                var superType = $(itemDescriptorElement).attr('super-type');
+//                if (superType) { 
+//                    addSuperTypePropertiesToItemTypeArray(itemDescriptorName, superType, repositoryXml, repoPath);
+//                }
                 
             });
 
+        applySubtypingOnItemTypes();
+        
+        
         var primaryTablesOfItemDescriptors = {};
         $(htmlData.find('pre').first().text()).find('item-descriptor').each(function(index, element)  { 
             var itemDescriptorName = $(element).attr('name');
@@ -255,6 +302,35 @@ function addTableInfo() {
     
   }
 
+function findSubtypesOfItemDescriptor (itemDescriptor) {
+  var result = [];
+  $.map(superTypes, function(value, key) {
+      if ($.inArray(itemDescriptor, value) == 1) {
+          result.push(key);
+      }
+  });
+  return result;
+}
+
+function applySubtypingOnItemTypes() {
+  var newItemTypes = {};
+  $.map(itemTypes, function(value, key) {
+      newItemTypes[key]=value;
+      var itemDescriptorName  = key.substring(0,key.indexOf('->'));
+      var propertyName= key.substring(key.indexOf('->')+2);
+
+      var subtypesOfThisItemDescriptor = findSubtypesOfItemDescriptor(itemDescriptorName);
+      $(subtypesOfThisItemDescriptor).each(function (i, subtype) {
+          var newKey = subtype+'->'+propertyName;
+          newItemTypes[newKey]=value;
+          
+          itemProperties[newKey]=itemProperties[key];
+          
+      });
+  });
+
+  itemTypes = newItemTypes;
+}
 
 // add new buttons each and every item-descriptor in the table
 var listItemDescriptorsLink = $('a[name=listItemDescriptors]');
@@ -368,11 +444,10 @@ function makeAddItemRefsClickable() {
     var propertyName = propertyNameNode.text();
  	propertyName=propertyName.substring(1);
     propertyName=propertyName.substring(0,propertyName.length-1);
-    if (propertyName.trim().length > 0) {        
+      if (propertyName.trim().length > 0) {        
         
         var itemDescNameNode = propertyNameNode.parent().prevAll('span:contains("add-item"):first').find('span.value:first');
         var itemDescName = itemDescNameNode.text().substring(1);
-
         itemDescName=itemDescName.substring(0,itemDescName.length-1);
   		var valueNode = propertyNameNode.parent().next();      
         var value=valueNode.text();
@@ -479,6 +554,5 @@ if (typeof openItem !== 'undefined' && openItem !== 'null') {
     
     applyQueryOneTemplate(itemDescName, itemId);
 }
-
 
 
