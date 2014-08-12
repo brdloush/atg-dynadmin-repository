@@ -34,7 +34,7 @@ to repository pages of "Dynamo admin" http UI of ATG platform. (think *localhost
   * Alt+t = jump to the start of repository Table (the one containing items & their properties)
   * Alt+s = jump to repository cache Statistics
   * Alt+r = jump to query Results
-  * Alt+o = open repository choOser modal window (not very usefull at the moment)
+  * Alt+o = open repository choOser modal window (user can manage his own "bookmarks")
   * Alt+c = jump to Charts with cache hit/miss
   * Ctrl+Enter (in XML editor) = execute the query
 
