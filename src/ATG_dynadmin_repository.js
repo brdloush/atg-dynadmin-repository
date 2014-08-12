@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       ATG_dynadmin_repository
 // @namespace  http://github.com/brdloush/atg-dynadmin-repository/
-// @version    0.17
+// @version    0.18
 
 // @description  Script that adds useful new buttons to ATG dyn/admin/nucleus UI + provides XML colorization to results of repository queries.  
 // @match      http://*/dyn/admin/nucleus/*Repository*
@@ -16,9 +16,12 @@
 // @require       http://cdnjs.cloudflare.com/ajax/libs/codemirror/3.21.0/mode/xml/xml.js
 // @require       http://cdn.jsdelivr.net/simplemodal/1.4.4/jquery.simplemodal.min.js
 // @require       http://cdnjs.cloudflare.com/ajax/libs/Chart.js/0.2.0/Chart.min.js
+// @grant    GM_addStyle
 // @updateUrl     http://github.com/brdloush/atg-dynadmin-repository/blob/master/src/ATG_dynadmin_repository.js
 
 // ==/UserScript==
+// 0.18 - Alt+o now contains a list of user's favourite repositories (ProductCatalog and OrderRepository by default). User can add/remove favourites,
+//        the list of favourites it's saved in local storage.
 // 0.17 - clickable references should now work even for properties which are inherited from supertypes (eg. product) to subtypes (yourCustomProduct) 
 // 0.16 - Alt+o opens a modal window containing repositories listed in ContentRepositories component
 //      - Repository cache-miss percentage statistics graphs at the bottom of the page
@@ -41,98 +44,207 @@
 // 0.2 - query links turned to green buttons, added restart and invalidate repository buttons to the top of the page
 // 0.1 - initial release : query links for each item descriptor, jumping directly to results of queries
 
-function useCSS(url) {
-  var cssNode = document.createElement('link');
-  cssNode.type = 'text/css';
-  cssNode.rel = 'stylesheet';
-  cssNode.href = url;
-  cssNode.media = 'screen';
-  document.getElementsByTagName('head')[0].appendChild(cssNode);
+// 
+performPageLoadInitialization();
+
+
+/**
+ * Performs initialization of all the customizations, loading of CSSs etc.
+ */
+function performPageLoadInitialization() {
+    // add custom CSS
+    GM_addStyle(".simplemodal-data { color: black !important; background-color: #ddd !important; } \
+#simplemodal-container a { color: black !important;}             \
+");
+    
+    // import highlight.js CSS 
+    useCSS('http://yandex.st/highlightjs/7.3/styles/github.min.css');
+    useCSS('http://cdnjs.cloudflare.com/ajax/libs/codemirror/3.20.0/codemirror.css')
+    useCSS('https://simplemodal.googlecode.com/svn-history/r257/trunk/simplemodal/demo/css/basic.css')
+    useCSS('http://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css')
 }
 
-// import highlight.js CSS 
-useCSS('http://yandex.st/highlightjs/7.3/styles/github.min.css');
-useCSS('http://cdnjs.cloudflare.com/ajax/libs/codemirror/3.20.0/codemirror.css')
-useCSS('https://simplemodal.googlecode.com/svn-history/r257/trunk/simplemodal/demo/css/basic.css')
-useCSS('http://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css')
+/**
+ * Returns a JSON object containing saved repository locations etc.
+ */
+function getStoredConfig() {
+    var config = localStorage.getItem('brdloush.atg-dynadmin-repository.storedConfig');
+    if ( config !== null ) {
+        return  JSON.parse(config);
+    } else {
+        config = {};
+        preFillBasicStoredConfig(config);
+        storeConfig(config);
+        return config;
+    }
+}
 
+/**
+ * Stores a config with saved repository locations etc
+ */
+function storeConfig(storedConfig) {
+    localStorage.setItem('brdloush.atg-dynadmin-repository.storedConfig',JSON.stringify(storedConfig));
+}
+
+/**
+ * Fills some default values insto empty stored config object;
+ */
+function preFillBasicStoredConfig(storedConfig) {
+    storedConfig['storedRepositories'] = [
+        {name:'ProductCatalog', path:'/atg/commerce/catalog/ProductCatalog'},
+        {name:'OrderRepository', path:'/atg/commerce/order/OrderRepository'}
+    ];
+}
+
+/**
+ * Adds new saved repository and saves it to local storage.
+ */
+function addSavedRepository(name, path) {
+    var config = getStoredConfig();
+    config.storedRepositories.push({name:name, path:path});
+    storeConfig(config);
+}
+
+/**
+ * 
+ */
+function removeSavedRepository(repositoryPath) {
+    var config = getStoredConfig();
+    var newStoredRepositories = [];
+    for (i=0;i<config.storedRepositories.length;i++) {
+        debugger;
+        if (config.storedRepositories[i].path != repositoryPath) {
+            newStoredRepositories.push(config.storedRepositories[i]);
+        }
+    }
+    config.storedRepositories = newStoredRepositories;
+    storeConfig(config);
+    
+}
+
+
+/**
+ * Helper function that allows to set attributes (specified as JSON) to specified object.
+ */
+function setObjectAttributes(el, attrs) {
+    for(var key in attrs) {
+        el.setAttribute(key, attrs[key]);
+    }
+}
+
+/**
+ * Imports CSS into page (adds the css node to html head)
+ */
+function useCSS(url) {
+    var cssNode = document.createElement('link');
+    setObjectAttributes(cssNode, {type:'text/css', rel:'stylesheet', href:url, media:'screen'});
+    document.getElementsByTagName('head')[0].appendChild(cssNode);
+}
+
+// global variables for SHIFT and CTRL keys
 var shiftPressed = false;
 var ctrlPressed = false;
 $(document).bind('keyup keydown', function(e){shiftPressed = e.shiftKey; ctrlPressed = e.ctrlKey;} );
 
-$.urlParam = function(name){
+/**
+ * Parses current URL and returns a value of specified parameter. 
+ */
+$.getParamFromCurrentURL = function(name){
     var results = new RegExp('[\\?&]' + name + '=([^&#]*)').exec(window.location.href);
     if (results==null){
-       return null;
+        return null;
     }
     else{
-       return results[1] || 0;
+        return results[1] || 0;
     }
 }
 
-//
+/**
+ * Opens a repository chooser modal window.
+ */
 function repositoryChooserModal() {
     
-    var urlForContentRepositories = "/dyn/admin/nucleus/atg/registry/ContentRepositories";
+    var storedConfig = getStoredConfig();
+    
+    
     var modalContent = $("<div id='simplemodal-container' style='height:100%;' />");
-        $.get(urlForContentRepositories, function( data ) {
-       	   var htmlData = $(data);
-           var repositoryLinks = htmlData.filter("h1:contains('Directory Listing')").siblings().filter('ul').children('h3').children('a');
-		   var ulContent = $("<ul/>");
-            ulContent.appendTo(modalContent);
-
-            repositoryLinks.each(function(i, e) {
-              var linkHref = $(e);
-              var repoUrl = linkHref.attr('href');
-              var url=urlForContentRepositories+'/'+repoUrl;
-                var liContent = $('<li/>');
-                liContent.appendTo(ulContent);
-                var href = $('<a href="'+url+'">'+repoUrl+'</a>')
-                href.appendTo(liContent);
-               console.log(url);
-			});
-            $.modal(modalContent, {minHeight: "500px"});
+    
+    var innerDiv = $('<div id="repositoryChooser"/>');
+    innerDiv.appendTo(modalContent);
+    
+    
+    var ulContent = $("<ul/>");
+    ulContent.appendTo(modalContent);
+    for (i=0;i<storedConfig.storedRepositories.length;i++) {
+        var repository = storedConfig.storedRepositories[i];
+        var liContent = $('<li/>')
+        liContent.appendTo(ulContent);
+        var span = $('<span/>');
+        span.appendTo(liContent);
+        var href = $('<a/>').attr('href','/dyn/admin/nucleus/'+repository.path).text(repository.name);
+        var hrefDelete = $('<a><button style="background-color: #EEAAAA;"><i class="fa fa-times"/></button></a>').attr('repoPath',repository.path);
+        href.appendTo(span);
+        hrefDelete.appendTo(span);
+        hrefDelete.click(function(e) {
+            var repositoryPath = $(e.target).parents('a[repoPath]').attr('repoPath');
+            removeSavedRepository(repositoryPath);
+            $(e.target).parents().find('.simplemodal-close').click();
         });
+        
+    }
+    
+    var addNewDiv = $('<div><strong>Add new favourite component: </strong><br/>Name:<input name="name"/>, Path:<input name="path"/> </div>');
+    var hrefCreate = $('<a><button style="background-color: #AAEEAA;"><i class="fa fa-flash"/></button></a>');
+    hrefCreate.appendTo(addNewDiv);
+    hrefCreate.click(function(e) {
+        debugger;
+        var parentDiv = $(e.target).closest('div');
+        var name = parentDiv.find('input[name=name]').val();
+        var path = parentDiv.find('input[name=path]').val();
+        addSavedRepository(name,path);
+        $(e.target).parents().find('.simplemodal-close').click();
+    });
+    
+    addNewDiv.appendTo(modalContent)
+    $.modal(modalContent, {minHeight: "500px"});
 }
 
 function applyQueryOneTemplate(itemDescriptorName, id) {
     var textelement = $('textarea[name=xmltext]');
     textelement.attr('value', '<query-items item-descriptor="'+itemDescriptorName+'"> \n ID IN {"'+id+'"} \n </query-items>');
-  textelement.attr('id', 'querytextelement');
-  synchronizeEditor();
-
+    textelement.attr('id', 'querytextelement');
+    synchronizeEditor();
     $('form').submit();
-    return;
 }
 
 
 function applyQueryTemplate(itemDescriptorName, rangeString, focusOnTextElement) {
-  var textelement = $('textarea[name=xmltext]');
-  textelement.attr('value', '<query-items item-descriptor="'+itemDescriptorName+'"> \n ALL '+rangeString+'\n </query-items>');
-  textelement.attr('id', 'querytextelement');
-  synchronizeEditor();
-  if (shiftPressed) {
-    $('form').submit();
-    return;
-  }    
-  if (focusOnTextElement) {
-    document.location.href="#querytextelementjump";
-  }
+    var textelement = $('textarea[name=xmltext]');
+    textelement.attr('value', '<query-items item-descriptor="'+itemDescriptorName+'"> \n ALL '+rangeString+'\n </query-items>');
+    textelement.attr('id', 'querytextelement');
+    synchronizeEditor();
+    if (shiftPressed) {
+        $('form').submit();
+        return;
+    }    
+    if (focusOnTextElement) {
+        document.location.href="#querytextelementjump";
+    }
 }
 
 function applyRemoveTemplate(itemDescriptorName, focusOnTextElement) {
-  var textelement = $('textarea[name=xmltext]');
-  textelement.attr('value', '<remove-item item-descriptor="'+itemDescriptorName+'" id=""/>');  
-  textelement.attr('id', 'querytextelement');
-  synchronizeEditor();
-
+    var textelement = $('textarea[name=xmltext]');
+    textelement.attr('value', '<remove-item item-descriptor="'+itemDescriptorName+'" id=""/>');
+    textelement.attr('id', 'querytextelement');
+    synchronizeEditor();
+    
     if (focusOnTextElement) {
-    document.location.href="#querytextelementjump";
-  }
+        document.location.href="#querytextelementjump";
+    }
 }
 
 function applyAddTemplate(itemDescriptorName, focusOnTextElement, urlForProperties, onlyRequiredProperties) {
-   
+    
     $.get(urlForProperties, function( data ) {
         htmlData = $(data);
         var resultQuery = '<add-item item-descriptor="'+itemDescriptorName+'" id="">';
@@ -140,7 +252,7 @@ function applyAddTemplate(itemDescriptorName, focusOnTextElement, urlForProperti
         var tableWithProperties = htmlData.find('th:contains("property type")').closest('table');
         var propertyRows =  $(tableWithProperties).find('tr');
         propertyRows.each(function(i, e) {
-        //    $(e).css('background-color', 'yellow');
+            //    $(e).css('background-color', 'yellow');
             var tds = $(e).find('td');
             var name = $(e).find('td:nth-child(1)').text();
             name = name.substring(name.lastIndexOf("(")+1,name.lastIndexOf(")"));
@@ -148,27 +260,27 @@ function applyAddTemplate(itemDescriptorName, focusOnTextElement, urlForProperti
             
             var required = $(e).find('td:nth-child(6)');
             if (name.length > 0) {    
-              if (!onlyRequiredProperties || (required.text() == 'true')) {
-               var setProperty = '<set-property name="'+name+'"><![CDATA[__NULL__]]></set-property>';
-              resultQuery+="\n";
-              resultQuery+=setProperty;    
-              }
-        
-             
+                if (!onlyRequiredProperties || (required.text() == 'true')) {
+                    var setProperty = '<set-property name="'+name+'"><![CDATA[__NULL__]]></set-property>';
+                    resultQuery+="\n";
+                    resultQuery+=setProperty;    
+                }
+                
+                
             }
         });
-       resultQuery += "\n</add-item>";
-
+        resultQuery += "\n</add-item>";
+        
         var textelement = $('textarea[name=xmltext]');
-  	    textelement.attr('value', resultQuery);  
+        textelement.attr('value', resultQuery);  
         textelement.attr('id', 'querytextelement');
         synchronizeEditor();
         
     });
-
+    
     if (focusOnTextElement) {
-    document.location.href="#querytextelementjump";
-  }
+        document.location.href="#querytextelementjump";
+    }
 }
 
 var itemProperties = {};
@@ -176,40 +288,40 @@ var itemTypes = {};
 
 function addSuperTypePropertiesToItemTypeArray(targetItemDescriptor, currentSuperType, repositoryXml, repoPath) {
     var itemDescriptorElement = $(repositoryXml).find("item-descriptor[name="+currentSuperType+"]");
-   var props = itemDescriptorElement.find("property[component-item-type],property[component-item-type]");
-   
+    var props = itemDescriptorElement.find("property[component-item-type],property[component-item-type]");
+    
     props.each(function(i, prop) {
-     addLinkedPropertyToItemType(prop, repoPath, targetItemDescriptor);
-   });
-   
-   if ($(itemDescriptorElement).attr('super-type')) {
-	 var superType= ($(itemDescriptorElement).attr('super-type'));
-     addSuperTypePropertiesToItemTypeArray(targetItemDescriptor, superType, repositoryXml, repoPath);
-   }
-
+        addLinkedPropertyToItemType(prop, repoPath, targetItemDescriptor);
+    });
+    
+    if ($(itemDescriptorElement).attr('super-type')) {
+        var superType= ($(itemDescriptorElement).attr('super-type'));
+        addSuperTypePropertiesToItemTypeArray(targetItemDescriptor, superType, repositoryXml, repoPath);
+    }
+    
 }
 
 function addLinkedPropertyToItemType(prop, repoPath, itemDescriptorNameOverride) {
-                var itemDescriptorElement = $(prop).parent();
-                var itemDescriptorName =  itemDescriptorElement.attr('name');
-                var propName = $(prop).attr('name');
+    var itemDescriptorElement = $(prop).parent();
+    var itemDescriptorName =  itemDescriptorElement.attr('name');
+    var propName = $(prop).attr('name');
     
-   				if (itemDescriptorNameOverride) {
- 				   	itemDescriptorName = itemDescriptorNameOverride;
-   				}
-                var propKey=itemDescriptorName+"->"+propName;
-                var repository=$(prop).attr('repository');
-                if (typeof repository === 'undefined') {
-                    repository = repoPath;
-                }
-                itemProperties[propKey]=repository;
-                var itemType = $(prop).attr('item-type'); 
-                if ($(prop).attr('component-item-type')) {
-                	itemType = $(prop).attr('component-item-type'); 
-                };
-				//
-
-    	itemTypes[propKey]=itemType;
+    if (itemDescriptorNameOverride) {
+        itemDescriptorName = itemDescriptorNameOverride;
+    }
+    var propKey=itemDescriptorName+"->"+propName;
+    var repository=$(prop).attr('repository');
+    if (typeof repository === 'undefined') {
+        repository = repoPath;
+    }
+    itemProperties[propKey]=repository;
+    var itemType = $(prop).attr('item-type'); 
+    if ($(prop).attr('component-item-type')) {
+        itemType = $(prop).attr('component-item-type'); 
+    };
+    //
+    
+    itemTypes[propKey]=itemType;
 }
 
 superTypes = {};
@@ -223,7 +335,7 @@ function addSupertypesRecursivelyForDescriptor(superTypesMap, newlyDerivedMap, c
     var childOfCurrentlyProcessedParent = superTypesMap[currentlyProcessedParent];
     if (typeof childOfCurrentlyProcessedParent != 'undefined' && $.inArray(childOfCurrentlyProcessedParent, superTypesMapKeys)) {
         childOfCurrentlyProcessedParent = childOfCurrentlyProcessedParent[0];
-        console.log('going even deeper from '+currentlyProcessedParent+' to '+childOfCurrentlyProcessedParent);
+        //console.log('going even deeper from '+currentlyProcessedParent+' to '+childOfCurrentlyProcessedParent);
         addSupertypesRecursivelyForDescriptor(superTypesMap, newlyDerivedMap, childDescriptor, childOfCurrentlyProcessedParent);
     } 
 }
@@ -232,64 +344,64 @@ function addSupertypesRecursively(superTypesMap) {
     var superTypesMapKeys = $.map(superTypesMap, function(value, key) { return key;});
     var newlyDerivedMap = {};
     $.map(superTypesMap, function(value, key) {
-        	newlyDerivedMap[key] = [];
-        	var firstValue= value[0];
-            if ($.inArray(firstValue,superTypesMapKeys)) {
-                console.log('going recursive for item '+key+'='+firstValue);
-                addSupertypesRecursivelyForDescriptor(superTypesMap, newlyDerivedMap, key, firstValue);
-            } else {
-				newlyDerivedMap[key] = [firstValue];
-            }
-        });  
+        newlyDerivedMap[key] = [];
+        var firstValue= value[0];
+        if ($.inArray(firstValue,superTypesMapKeys)) {
+            //            console.log('going recursive for item '+key+'='+firstValue);
+            addSupertypesRecursivelyForDescriptor(superTypesMap, newlyDerivedMap, key, firstValue);
+        } else {
+            newlyDerivedMap[key] = [firstValue];
+        }
+    });  
     return newlyDerivedMap;
 }
 
 
 function addTableInfo() {
     var urlForDescriptors =  $('a:contains("Examine Repository Template Definition")').attr('href');
-	var repoPath = urlForDescriptors.replace('/dyn/admin/nucleus',''); repoPath = repoPath.substring(0, repoPath.lastIndexOf("/"))
-
+    var repoPath = urlForDescriptors.replace('/dyn/admin/nucleus',''); repoPath = repoPath.substring(0, repoPath.lastIndexOf("/"))
+    
     $.get(urlForDescriptors, function( data ) {
         var htmlData = $(data);
         
         var repositoryXml = $(htmlData.find('pre').first().text());
-
+        
         // find out  parent item-types for subtyped items
         repositoryXml.find('item-descriptor[super-type]').each(function(i, item) {
-			$item = $(item);
+            $item = $(item);
             var thisItemDescriptorName = $item.attr('name'); 
             var descriptorNameOfSupertype = $item.attr('super-type');
-  			superTypes[thisItemDescriptorName] = [descriptorNameOfSupertype];
+            superTypes[thisItemDescriptorName] = [descriptorNameOfSupertype];
         }); 
-	    // now let's recursively calculate all parents of subtyped items
+        // now let's recursively calculate all parents of subtyped items
         superTypes = addSupertypesRecursively(superTypes);
         
         
         var propertiesWithItemType = repositoryXml.find('property[item-type],property[component-item-type]');
         // as we're parsing this valuable table info, we'll also parse a item->property->repository
-            propertiesWithItemType.each(function(i, prop) {
-                addLinkedPropertyToItemType(prop, repoPath);
-               
-//                var itemDescriptorElement = $(prop).parent();
-//                var itemDescriptorName =  itemDescriptorElement.attr('name');
-//                
-//                var superType = $(itemDescriptorElement).attr('super-type');
-//                if (superType) { 
-//                    addSuperTypePropertiesToItemTypeArray(itemDescriptorName, superType, repositoryXml, repoPath);
-//                }
-                
-            });
-
+        propertiesWithItemType.each(function(i, prop) {
+            addLinkedPropertyToItemType(prop, repoPath);
+            
+            //                var itemDescriptorElement = $(prop).parent();
+            //                var itemDescriptorName =  itemDescriptorElement.attr('name');
+            //                
+            //                var superType = $(itemDescriptorElement).attr('super-type');
+            //                if (superType) { 
+            //                    addSuperTypePropertiesToItemTypeArray(itemDescriptorName, superType, repositoryXml, repoPath);
+            //                }
+            
+        });
+        
         applySubtypingOnItemTypes();
         
         
         var primaryTablesOfItemDescriptors = {};
         $(htmlData.find('pre').first().text()).find('item-descriptor').each(function(index, element)  { 
             var itemDescriptorName = $(element).attr('name');
-			var primaryTableName = $(element).find('table[type=primary]').attr('name');
+            var primaryTableName = $(element).find('table[type=primary]').attr('name');
             primaryTablesOfItemDescriptors[itemDescriptorName]=primaryTableName;
         } );
-  
+        
         
         for(var descriptorName in primaryTablesOfItemDescriptors)
         {
@@ -300,36 +412,36 @@ function addTableInfo() {
         makeAddItemRefsClickable();
     });
     
-  }
+}
 
 function findSubtypesOfItemDescriptor (itemDescriptor) {
-  var result = [];
-  $.map(superTypes, function(value, key) {
-      if ($.inArray(itemDescriptor, value) == 1) {
-          result.push(key);
-      }
-  });
-  return result;
+    var result = [];
+    $.map(superTypes, function(value, key) {
+        if ($.inArray(itemDescriptor, value) == 1) {
+            result.push(key);
+        }
+    });
+    return result;
 }
 
 function applySubtypingOnItemTypes() {
-  var newItemTypes = {};
-  $.map(itemTypes, function(value, key) {
-      newItemTypes[key]=value;
-      var itemDescriptorName  = key.substring(0,key.indexOf('->'));
-      var propertyName= key.substring(key.indexOf('->')+2);
-
-      var subtypesOfThisItemDescriptor = findSubtypesOfItemDescriptor(itemDescriptorName);
-      $(subtypesOfThisItemDescriptor).each(function (i, subtype) {
-          var newKey = subtype+'->'+propertyName;
-          newItemTypes[newKey]=value;
-          
-          itemProperties[newKey]=itemProperties[key];
-          
-      });
-  });
-
-  itemTypes = newItemTypes;
+    var newItemTypes = {};
+    $.map(itemTypes, function(value, key) {
+        newItemTypes[key]=value;
+        var itemDescriptorName  = key.substring(0,key.indexOf('->'));
+        var propertyName= key.substring(key.indexOf('->')+2);
+        
+        var subtypesOfThisItemDescriptor = findSubtypesOfItemDescriptor(itemDescriptorName);
+        $(subtypesOfThisItemDescriptor).each(function (i, subtype) {
+            var newKey = subtype+'->'+propertyName;
+            newItemTypes[newKey]=value;
+            
+            itemProperties[newKey]=itemProperties[key];
+            
+        });
+    });
+    
+    itemTypes = newItemTypes;
 }
 
 // add new buttons each and every item-descriptor in the table
@@ -349,28 +461,28 @@ thElemsWithRepositoryItemNames.each(function(index, element)  {
 
 // add behaviors to new item-descriptor buttons
 $('a[name=queryAllButton]').click(function(event) {
-  var linkThatWasClicked = $(event.target).parent();
-  var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
-  applyQueryTemplate(itemDescriptorName,"", true);
+    var linkThatWasClicked = $(event.target).parent();
+    var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
+    applyQueryTemplate(itemDescriptorName,"", true);
 });
 
 $('a[name=queryAllTop50Button]').click(function(event) {
-  var linkThatWasClicked = $(event.target).parent();
-  var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
-  applyQueryTemplate(itemDescriptorName," RANGE 0 +50",true);
+    var linkThatWasClicked = $(event.target).parent();
+    var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
+    applyQueryTemplate(itemDescriptorName," RANGE 0 +50",true);
 });
 
 $('a[name=removeItemButton]').click(function(event) {
-  var linkThatWasClicked = $(event.target).parent();
-  var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
-  applyRemoveTemplate(itemDescriptorName,true);
+    var linkThatWasClicked = $(event.target).parent();
+    var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
+    applyRemoveTemplate(itemDescriptorName,true);
 });
 
 $('a[name=addItemButton]').click(function(event) {
-  var linkThatWasClicked = $(event.target).parent();
-  var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
+    var linkThatWasClicked = $(event.target).parent();
+    var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
     var urlForProperties = linkThatWasClicked.closest('tr').find('td:nth-child(2)').find('a').attr('href');
-  var onlyRequiredProperties = !shiftPressed;
+    var onlyRequiredProperties = !shiftPressed;
     applyAddTemplate(itemDescriptorName, true, urlForProperties, onlyRequiredProperties);
 });
 
@@ -382,14 +494,14 @@ textelement.parent().parent().prepend(newLink);
 // if there are some errors on page, create jump link
 var errorsElement = $('p:contains("Errors:")');
 if (errorsElement.length > 0) {
-	errorsElement.html('<a name="errorsJumpLink"><p>Errors:</p></a>');
-	document.location.href="#errorsJumpLink";
+    errorsElement.html('<a name="errorsJumpLink"><p>Errors:</p></a>');
+    document.location.href="#errorsJumpLink";
 } else {
     //if the page currently contains results of query, jump to them!
     var resultsElement = $('h2:contains("Results")');
     if (resultsElement.length > 0) {
-      resultsElement.html('<a name="resultsJumpLink">Results:</a>');
-      document.location.href="#resultsJumpLink";
+        resultsElement.html('<a name="resultsJumpLink">Results:</a>');
+        document.location.href="#resultsJumpLink";
     }
 } 
 
@@ -418,67 +530,67 @@ $('textarea').css('width', '100%');
 
 // mouse trap - keyboard shortcuts. Alt+x = jump to xml editor. Alt+t = jump to table with item descriptors. Alt+S = jump to statistics.
 Mousetrap.bind('alt+x', function(e) {$('html,body').animate({scrollTop: $('div.CodeMirror').offset().top}); 
-                                    $('textarea').each(function(i, e) {hljs.highlightBlock(e)});
-
+                                     $('textarea').each(function(i, e) {hljs.highlightBlock(e)});
+                                     
                                     });
 Mousetrap.bind('alt+t', function(e) {$('html,body').animate({scrollTop: table.offset().top});});
 Mousetrap.bind('alt+s', function(e) {$('html,body').animate({scrollTop: $('h2:contains("Cache usage statistics")').offset().top});});
 Mousetrap.bind('alt+r', function(e) {$('html,body').animate({scrollTop: $('a[name=resultsJumpLink]').offset().top});});
 Mousetrap.bind('alt+o', function(e) { repositoryChooserModal() });
 
- myCodeMirror = CodeMirror.fromTextArea($('textarea').get(0));
+myCodeMirror = CodeMirror.fromTextArea($('textarea').get(0));
 $('div.CodeMirror').css('background-color','#f8f8ff');
 $('div.CodeMirror').css('border','solid 1px');
 
 function synchronizeEditor() {
-  var textelement = $('textarea[name=xmltext]');
-  myCodeMirror.getDoc().setValue(textelement.attr('value'));
+    var textelement = $('textarea[name=xmltext]');
+    myCodeMirror.getDoc().setValue(textelement.attr('value'));
 }
 
 function makeAddItemRefsClickable() {
-  // make <add-item> references to other repository items clickable 
-  var allSetPropertyTags = $('span.title:contains("set-property")');
-  allSetPropertyTags.each(function (i, node) {
-  
-    var propertyNameNode = $(node).next().next(); 
-    var propertyName = propertyNameNode.text();
- 	propertyName=propertyName.substring(1);
-    propertyName=propertyName.substring(0,propertyName.length-1);
-      if (propertyName.trim().length > 0) {        
+    // make <add-item> references to other repository items clickable 
+    var allSetPropertyTags = $('span.title:contains("set-property")');
+    allSetPropertyTags.each(function (i, node) {
         
-        var itemDescNameNode = propertyNameNode.parent().prevAll('span:contains("add-item"):first').find('span.value:first');
-        var itemDescName = itemDescNameNode.text().substring(1);
-        itemDescName=itemDescName.substring(0,itemDescName.length-1);
-  		var valueNode = propertyNameNode.parent().next();      
-        var value=valueNode.text();
-        
-        var propKey = itemDescName+"->"+propertyName;
-        var repositoryName = itemProperties[propKey];
-        if (typeof repositoryName !== 'undefined') {
-	        var original = valueNode.text();
-    	    var cleaned = original.replace('<![CDATA[','');
-        	var cleaned = cleaned.replace(']]>','')
-			var tokens = cleaned.split(',');
-
-            var newElements = $('<span/>');
-            for (i=0;i<tokens.length;i++)  {
-            	var token = tokens[i];
-                var itemType = itemTypes[propKey];
-                var url = '/dyn/admin/nucleus'+repositoryName+"?openItem="+itemType+"->"+token;
-                if (i>0) {
-                    $("<span>,</span>").appendTo(newElements);
+        var propertyNameNode = $(node).next().next(); 
+        var propertyName = propertyNameNode.text();
+        propertyName=propertyName.substring(1);
+        propertyName=propertyName.substring(0,propertyName.length-1);
+        if (propertyName.trim().length > 0) {        
+            
+            var itemDescNameNode = propertyNameNode.parent().prevAll('span:contains("add-item"):first').find('span.value:first');
+            var itemDescName = itemDescNameNode.text().substring(1);
+            itemDescName=itemDescName.substring(0,itemDescName.length-1);
+            var valueNode = propertyNameNode.parent().next();      
+            var value=valueNode.text();
+            
+            var propKey = itemDescName+"->"+propertyName;
+            var repositoryName = itemProperties[propKey];
+            if (typeof repositoryName !== 'undefined') {
+                var original = valueNode.text();
+                var cleaned = original.replace('<![CDATA[','');
+                var cleaned = cleaned.replace(']]>','')
+                var tokens = cleaned.split(',');
+                
+                var newElements = $('<span/>');
+                for (i=0;i<tokens.length;i++)  {
+                    var token = tokens[i];
+                    var itemType = itemTypes[propKey];
+                    var url = '/dyn/admin/nucleus'+repositoryName+"?openItem="+itemType+"->"+token;
+                    if (i>0) {
+                        $("<span>,</span>").appendTo(newElements);
+                    }
+                    $('<a href="'+url+'">'+token+'</a>').css('background-color','#AAEEAA').appendTo(newElements);
                 }
-                $('<a href="'+url+'">'+token+'</a>').css('background-color','#AAEEAA').appendTo(newElements);
+                valueNode.text('');
+                newElements.appendTo(valueNode);
             }
-            valueNode.text('');
-            newElements.appendTo(valueNode);
+            
+            //        itemDescName = itemDescName.replace('"','').replace('"','');
+            //    console.log(itemDescName+"->"+propertyName+" ==> "+ value);
         }
-                                            
-//        itemDescName = itemDescName.replace('"','').replace('"','');
-	//    console.log(itemDescName+"->"+propertyName+" ==> "+ value);
-    }
-});
-
+    });
+    
 }
 
 
@@ -492,9 +604,9 @@ var itemLabels = [];
 var itemMiss = [];
 var queryMiss = [];
 itemDescTRs.each(function (i, elem) {
-	var idName = $(elem).text().replace('item-descriptor=', '');
+    var idName = $(elem).text().replace('item-descriptor=', '');
     idName = idName.substring(0, idName.indexOf('cache-mode'));
-	var itemCacheRow = $(elem).next();
+    var itemCacheRow = $(elem).next();
     var queryCacheRow = $(elem).next().next();
     var a=0;
     itemLabels.push(idName);
@@ -517,19 +629,19 @@ $('<canvas id="chart" width="'+canvasWidth+'" height="400"></canvas>').appendTo(
 var ctx = document.getElementById("chart").getContext("2d");
 
 var data = {
-	labels : itemLabels,
-	datasets : [
-		{
-			fillColor : "rgba(220,220,220,0.5)",
-			strokeColor : "rgba(220,220,220,1)",
-			data : itemMiss
-		},
-		{
-			fillColor : "rgba(151,187,205,0.5)",
-			strokeColor : "rgba(151,187,205,1)",
-			data : queryMiss
-		}        
-	]
+    labels : itemLabels,
+    datasets : [
+        {
+            fillColor : "rgba(220,220,220,0.5)",
+            strokeColor : "rgba(220,220,220,1)",
+            data : itemMiss
+        },
+        {
+            fillColor : "rgba(151,187,205,0.5)",
+            strokeColor : "rgba(151,187,205,1)",
+            data : queryMiss
+        }        
+    ]
 } 
 var options = {};
 new Chart(ctx).Bar(data,options);
@@ -538,17 +650,17 @@ Mousetrap.bind('alt+c', function(e) {$('html,body').animate({scrollTop: $('h1[na
 
 
 var currentUrl = window.location.href;
-var openItem = decodeURIComponent($.urlParam('openItem'));
+var openItem = decodeURIComponent($.getParamFromCurrentURL('openItem'));
 
 
 if (typeof openItem !== 'undefined' && openItem !== 'null') {
     var baseUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/')+1);
-  
+    
     if (window.history.pushState) {
-   //prevents browser from storing history with each change:
-   window.history.pushState('', '', baseUrl);
-  }
-
+        //prevents browser from storing history with each change:
+        window.history.pushState('', '', baseUrl);
+    }
+    
     var itemDescName = openItem.substring(0, openItem.indexOf('->'));
     var itemId= openItem.substring(openItem.indexOf('->')+2);
     
