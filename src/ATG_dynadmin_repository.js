@@ -684,6 +684,8 @@ function sortItemDescriptorRowsByName() {
         } 
             return 0; 
     });
+    
+    originalRows.appendTo(tbody);
 }
 
 sortItemDescriptorRowsByName();
