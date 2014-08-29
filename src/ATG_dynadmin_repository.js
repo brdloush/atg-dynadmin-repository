@@ -210,6 +210,35 @@ function repositoryChooserModal() {
     $.modal(modalContent, {minHeight: "500px"});
 }
 
+
+function sortItemDescriptorRowsByName() {
+    
+    var listItemDescriptorsLink = $('a[name=listItemDescriptors]');
+    var table = listItemDescriptorsLink.parent().find('table');
+    debugger;
+    var originalRows = table.find('tr:gt(1)')
+    
+    var tbody = originalRows.parent('tbody');
+    originalRows.remove();
+    
+    originalRows.sort(function(a,b) {
+        debugger;
+        var aName = $(a).find('th').text();
+        var bName = $(b).find('th').text();
+        
+        if (aName < bName) {
+            return -1;
+        } else if (bName<aName) {
+            return 1;
+        } 
+            return 0; 
+    });
+    
+    originalRows.appendTo(tbody);
+}
+
+sortItemDescriptorRowsByName();
+
 function applyQueryOneTemplate(itemDescriptorName, id) {
     var textelement = $('textarea[name=xmltext]');
     textelement.attr('value', '<query-items item-descriptor="'+itemDescriptorName+'"> \n ID IN {"'+id+'"} \n </query-items>');
@@ -668,24 +697,3 @@ if (typeof openItem !== 'undefined' && openItem !== 'null') {
     applyQueryOneTemplate(itemDescName, itemId);
 }
 
-function sortItemDescriptorRowsByName() {
-    var originalRows = $('th[item-descriptor]').parent('tr');
-    var tbody = originalRows.parent('tbody');
-    originalRows.remove();
-    
-    originalRows.sort(function(a,b) {
-        var aName = $(a).find('th[item-descriptor]').attr('item-descriptor');
-        var bName = $(b).find('th[item-descriptor]').attr('item-descriptor');
-        
-        if (aName < bName) {
-            return -1;
-        } else if (bName<aName) {
-            return 1;
-        } 
-            return 0; 
-    });
-    
-    originalRows.appendTo(tbody);
-}
-
-sortItemDescriptorRowsByName();
