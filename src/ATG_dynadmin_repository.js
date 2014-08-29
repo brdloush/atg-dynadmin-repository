@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       ATG_dynadmin_repository
 // @namespace  http://github.com/brdloush/atg-dynadmin-repository/
-// @version    0.18
+// @version    0.19
 
 // @description  Script that adds useful new buttons to ATG dyn/admin/nucleus UI + provides XML colorization to results of repository queries.  
 // @match      http://*/dyn/admin/nucleus/*Repository*
@@ -20,6 +20,7 @@
 // @updateUrl     http://github.com/brdloush/atg-dynadmin-repository/blob/master/src/ATG_dynadmin_repository.js
 
 // ==/UserScript==
+// 0.19 - item descriptors in table are now being sorted by item descriptor name
 // 0.18 - Alt+o now contains a list of user's favourite repositories (ProductCatalog and OrderRepository by default). User can add/remove favourites,
 //        the list of favourites it's saved in local storage.
 // 0.17 - clickable references should now work even for properties which are inherited from supertypes (eg. product) to subtypes (yourCustomProduct) 
@@ -667,4 +668,22 @@ if (typeof openItem !== 'undefined' && openItem !== 'null') {
     applyQueryOneTemplate(itemDescName, itemId);
 }
 
+function sortItemDescriptorRowsByName() {
+    var originalRows = $('th[item-descriptor]').parent('tr');
+    var tbody = originalRows.parent('tbody');
+    originalRows.remove();
+    
+    originalRows.sort(function(a,b) {
+        var aName = $(a).find('th[item-descriptor]').attr('item-descriptor');
+        var bName = $(b).find('th[item-descriptor]').attr('item-descriptor');
+        
+        if (aName < bName) {
+            return -1;
+        } else if (bName<aName) {
+            return 1;
+        } 
+            return 0; 
+    });
+}
 
+sortItemDescriptorRowsByName();
