@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       ATG_dynadmin_repository
 // @namespace  http://github.com/brdloush/atg-dynadmin-repository/
-// @version    0.19
+// @version    0.21
 
 // @description  Script that adds useful new buttons to ATG dyn/admin/nucleus UI + provides XML colorization to results of repository queries.  
 // @match      http://*/dyn/admin/nucleus/*Repository*
@@ -20,6 +20,8 @@
 // @updateUrl     http://github.com/brdloush/atg-dynadmin-repository/blob/master/src/ATG_dynadmin_repository.js
 
 // ==/UserScript==
+// 0.21 - fixed query buttons click handling: if you clicked the icon part of the button, the item-descriptor was "undefined" in generated query
+// 0.20 - ALL (0-50) button modified to "Last 50" (order by id desc, limit 50)
 // 0.19 - item descriptors in table are now being sorted by item descriptor name
 // 0.18 - Alt+o now contains a list of user's favourite repositories (ProductCatalog and OrderRepository by default). User can add/remove favourites,
 //        the list of favourites it's saved in local storage.
@@ -113,7 +115,6 @@ function removeSavedRepository(repositoryPath) {
     var config = getStoredConfig();
     var newStoredRepositories = [];
     for (i=0;i<config.storedRepositories.length;i++) {
-        debugger;
         if (config.storedRepositories[i].path != repositoryPath) {
             newStoredRepositories.push(config.storedRepositories[i]);
         }
@@ -198,7 +199,6 @@ function repositoryChooserModal() {
     var hrefCreate = $('<a><button style="background-color: #AAEEAA;"><i class="fa fa-flash"/></button></a>');
     hrefCreate.appendTo(addNewDiv);
     hrefCreate.click(function(e) {
-        debugger;
         var parentDiv = $(e.target).closest('div');
         var name = parentDiv.find('input[name=name]').val();
         var path = parentDiv.find('input[name=path]').val();
@@ -215,14 +215,12 @@ function sortItemDescriptorRowsByName() {
     
     var listItemDescriptorsLink = $('a[name=listItemDescriptors]');
     var table = listItemDescriptorsLink.parent().find('table');
-    debugger;
     var originalRows = table.find('tr:gt(1)')
     
     var tbody = originalRows.parent('tbody');
     originalRows.remove();
     
     originalRows.sort(function(a,b) {
-        debugger;
         var aName = $(a).find('th').text();
         var bName = $(b).find('th').text();
         
@@ -249,6 +247,7 @@ function applyQueryOneTemplate(itemDescriptorName, id) {
 
 
 function applyQueryTemplate(itemDescriptorName, rangeString, focusOnTextElement) {
+    debugger;
     var textelement = $('textarea[name=xmltext]');
     textelement.attr('value', '<query-items item-descriptor="'+itemDescriptorName+'"> \n ALL '+rangeString+'\n </query-items>');
     textelement.attr('id', 'querytextelement');
@@ -483,33 +482,33 @@ thElemsWithRepositoryItemNames.each(function(index, element)  {
     var itemDescriptorName = $(element).text();
     $(element).attr('item-descriptor', itemDescriptorName); // add an attribute for simple lookup
     var queryALL = $('<a name="queryAllButton" itemDescriptorName="'+itemDescriptorName+'"><button title="CLICK: generate QUERY-ITEM template,\nSHIFT-CLICK: generate&execute template" style="background-color: #99DD99;"><i class="fa fa-search"/> ALL</button></a>');
-    var queryALLTop50 = $('<a name="queryAllTop50Button" itemDescriptorName="'+itemDescriptorName+'"><button title="CLICK: generate QUERY-ITEM template,\nSHIFT-CLICK: generate&execute template"  style="background-color: #99DD99;"><i class="fa fa-search"/> ALL (0-50)</button></a>');
+    var queryTop50 = $('<a name="queryTop50Button" itemDescriptorName="'+itemDescriptorName+'"><button title="CLICK: generate QUERY-ITEM template,\nSHIFT-CLICK: generate&execute template"  style="background-color: #99DD99;"><i class="fa fa-search"/> Last 50</button></a>');
     var removeItemButton = $('<a name="removeItemButton" itemDescriptorName="'+itemDescriptorName+'"><button title="CLICK: generate REMOVE template"  style="background-color: #EEAAAA;"><i class="fa fa-times"/></button></a>');
     var addItemButton = $('<a name="addItemButton" itemDescriptorName="'+itemDescriptorName+'"><button  title="CLICK: generate template with required properties only,\nSHIFT-CLICK: generate template with all properties" style="background-color: #99DD99;"><i style="height:100%;" class="fa fa-plus"/></button></a>');
-    $(element).append(queryALL,queryALLTop50,removeItemButton,addItemButton);
+    $(element).append(queryALL,queryTop50,removeItemButton,addItemButton);
 });
 
 // add behaviors to new item-descriptor buttons
 $('a[name=queryAllButton]').click(function(event) {
-    var linkThatWasClicked = $(event.target).parent();
+    var linkThatWasClicked = $(event.target).parents("a");
     var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
     applyQueryTemplate(itemDescriptorName,"", true);
 });
 
-$('a[name=queryAllTop50Button]').click(function(event) {
-    var linkThatWasClicked = $(event.target).parent();
+$('a[name=queryTop50Button]').click(function(event) {
+    var linkThatWasClicked = $(event.target).parents("a");
     var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
-    applyQueryTemplate(itemDescriptorName," RANGE 0 +50",true);
+    applyQueryTemplate(itemDescriptorName," ORDER BY ID DESC RANGE 0 +50",true);
 });
 
 $('a[name=removeItemButton]').click(function(event) {
-    var linkThatWasClicked = $(event.target).parent();
+    var linkThatWasClicked = $(event.target).parents("a");
     var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
     applyRemoveTemplate(itemDescriptorName,true);
 });
 
 $('a[name=addItemButton]').click(function(event) {
-    var linkThatWasClicked = $(event.target).parent();
+    var linkThatWasClicked = $(event.target).parents("a");
     var itemDescriptorName = linkThatWasClicked.attr('itemDescriptorName');
     var urlForProperties = linkThatWasClicked.closest('tr').find('td:nth-child(2)').find('a').attr('href');
     var onlyRequiredProperties = !shiftPressed;
